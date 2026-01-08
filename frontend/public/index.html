@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neuro Vehicle Data Logger</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="../src/styles/main.css">
+
+</head>
+<body>
+
+    <div id="dashboard">
+        <div class="sensor-row" id="rowPolar">
+            <div id="leftColumn" class="side-column">
+                <div id="statusCard" class="card-square">
+                    <div class="status-header">
+                        <div class="status-left">
+                            <div id="statusLed" class="status-led"></div>
+                            <div class="status-text">
+                                <span class="status-title">Polar H10</span>
+                                <div class="status-subline">
+                                    <span id="stato" class="status-subtitle">Non connesso</span>
+                                    <span id="polarBatteryBadge" class="status-badge">--%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mode-row">
+                        <div class="mode-switch">
+                            <button class="mode-btn active" data-mode="live">Live</button>
+                            <button class="mode-btn" data-mode="debug">Debug</button>
+                        </div>
+                    </div>
+                    <div class="status-footer">
+                        <div class="elapsed-block">
+                            <div id="elapsedLabel" class="elapsed-label">Tempo trascorso</div>
+                            <div id="elapsedTime" class="elapsed-time">00:00:00</div>
+                        </div>
+                        <div id="connectionTime" class="connection-time"></div>
+                    </div>
+                    <button id="connectButton" class="pill-button pill-button--primary pill-button--spaced">Connetti</button>
+                    <button id="loadCsvButton" class="pill-button pill-button--success pill-button--spaced">Carica CSV</button>
+                    <input type="file" id="csvInput" accept=".csv,text/csv" class="hidden-input" hidden />
+                </div>
+            </div>
+
+            <div id="chartContainer">
+                <div id="processingIndicator" class="processing-indicator" hidden>Ricalcolo…</div>
+                <div id="chartDropZone" class="chart-drop-zone" hidden>
+                    <div class="drop-zone-inner">
+                        <span class="drop-hint">Trascina qui il CSV</span>
+                    </div>
+                </div>
+                <div id="heartRateChartWrapper" class="chart-wrapper">
+                    <canvas id="heartRateChart"></canvas>
+                    <canvas id="markerOverlay"></canvas>
+                </div>
+                <div id="chartControls" class="chart-controls">
+                    <button id="settingsButton" class="icon-button" aria-expanded="false" aria-haspopup="true" aria-label="Impostazioni HRV">
+                        <svg class="icon-wrench" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M21 7.5a5.5 5.5 0 0 1-7.35 5.18l-6.48 6.48a1.5 1.5 0 0 1-2.12 0l-1.21-1.21a1.5 1.5 0 0 1 0-2.12l6.48-6.48A5.5 5.5 0 1 1 21 7.5Z"/>
+                        </svg>
+                    </button>
+                    <button id="downloadButton" class="icon-button" aria-label="Scarica CSV">
+                        <svg class="icon-download" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 3v10m0 0l-4-4m4 4l4-4M4 19h16"/>
+                        </svg>
+                    </button>
+                    <button id="markerButton" class="icon-button" aria-label="Aggiungi marker">
+                        <svg class="icon-pin" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 22s7-7.2 7-12a7 7 0 1 0-14 0c0 4.8 7 12 7 12Z"/>
+                            <circle cx="12" cy="10" r="2.5"/>
+                        </svg>
+                    </button>
+                    <div id="chartMetricPicker">
+                        <select id="metricSelect" class="select-pill">
+                            <option value="bpm">Battito (BPM)</option>
+                            <option value="rr">Intervallo R-R (ms)</option>
+                            <option value="rmssd">RMSSD (ms)</option>
+                            <option value="sdnn">SDNN (ms)</option>
+                            <option value="nn50">NN50 (coppie)</option>
+                            <option value="pnn50">pNN50 (%)</option>
+                            <option value="spectrum">Spettro LF/HF</option>
+                            <option value="hrvIndex">HRV (indice)</option>
+                            <option value="battery">Batteria (%)</option>
+                        </select>
+                    </div>
+                    <div id="settingsMenu">
+                        <div id="paramControls">
+                            <div class="setting-row">
+                                <div class="setting-label">Finestra analisi HRV/Spettro</div>
+                                <select id="windowSelect" class="select-pill" aria-label="Durata finestra spettro">
+                                    <option value="60">Finestra 60s</option>
+                                    <option value="120" selected>Finestra 120s</option>
+                                    <option value="180">Finestra 180s</option>
+                                    <option value="300">Finestra 300s</option>
+                                </select>
+                            </div>
+                            <div class="setting-row">
+                                <div class="setting-label">Outlier assoluto (delta tra battiti)</div>
+                                <select id="outlierAbsSelect" class="param-select" aria-label="Soglia outlier assoluta (ms)">
+                                    <option value="100">Outlier >100ms</option>
+                                    <option value="150">Outlier >150ms</option>
+                                    <option value="200" selected>Outlier >200ms</option>
+                                    <option value="250">Outlier >250ms</option>
+                                </select>
+                            </div>
+                            <div class="setting-row">
+                                <div class="setting-label">Outlier relativo (vs battito precedente)</div>
+                                <select id="outlierRelSelect" class="param-select" aria-label="Soglia outlier relativa">
+                                    <option value="0.1">+10%</option>
+                                    <option value="0.15">+15%</option>
+                                    <option value="0.2" selected>+20%</option>
+                                    <option value="0.25">+25%</option>
+                                </select>
+                            </div>
+                            <div class="setting-row">
+                                <div class="setting-label">Frequenza resampling (spline)</div>
+                                <select id="resampleSelect" class="param-select" aria-label="Frequenza resampling">
+                                    <option value="4" selected>Resample 4Hz</option>
+                                    <option value="6">Resample 6Hz</option>
+                                    <option value="8">Resample 8Hz</option>
+                                    <option value="10">Resample 10Hz</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="chartScroll" class="chart-scroll" hidden>
+                    <input type="range" id="chartScrollInput" min="0" max="0" value="0" step="1" aria-label="Scorri grafico"/>
+                </div>
+            </div>
+
+            <div id="dataContainer" class="side-column">
+                <div class="card-square data-card">
+                    <div class="data-box">
+                        <div class="label"><span class="icon-heart">❤</span>BATTITO</div>
+                        <div class="value" id="bpmValue">--</div>
+                        <div class="unit">BPM</div>
+                    </div>
+                </div>
+                <div class="card-square data-card">
+                    <div class="data-box">
+                        <div class="label"><span class="icon-rr">⏱</span>Intervallo R-R</div>
+                        <div class="value" id="rrValue">--</div>
+                        <div class="unit">ms</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="extremesContainer" class="side-column">
+                <div class="card-square data-card">
+                    <div class="data-box">
+                        <div class="label"><span class="icon-ext icon-max">⬆︎</span>BPM MAX</div>
+                        <div class="value" id="maxBpmValue">--</div>
+                        <div class="unit" id="maxBpmTime">--</div>
+                    </div>
+                </div>
+                <div class="card-square data-card">
+                    <div class="data-box">
+                        <div class="label"><span class="icon-ext icon-min">⬇︎</span>BPM MIN</div>
+                        <div class="value" id="minBpmValue">--</div>
+                        <div class="unit" id="minBpmTime">--</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="infoColumn" class="side-column info-column">
+                <div id="scienceCard" class="card-square info-card">
+                    <div class="info-header">
+                        <div class="info-title-row">
+                            <span class="icon-science">Σ</span>
+                            <span class="info-title">Metriche<sup>1</sup></span>
+                        </div>
+                    </div>
+                    <div class="info-body">
+                        <div class="metric-row">
+                            <div class="metric-label">RMSSD</div>
+                            <div class="metric-value">
+                                <span id="rmssdValue">--</span>
+                                <span class="metric-unit">ms</span>
+                            </div>
+                        </div>
+                        <div class="metric-row">
+                            <div class="metric-label">SDNN</div>
+                            <div class="metric-value">
+                                <span id="sdnnValue">--</span>
+                                <span class="metric-unit">ms</span>
+                            </div>
+                        </div>
+                        <div class="metric-row">
+                            <div class="metric-label">NN50</div>
+                            <div class="metric-value">
+                                <span id="nn50Value">--</span>
+                                <span class="metric-unit">coppie</span>
+                            </div>
+                        </div>
+                        <div class="metric-row">
+                            <div class="metric-label">pNN50</div>
+                            <div class="metric-value">
+                                <span id="pnn50Value">--</span>
+                                <span class="metric-unit">%</span>
+                            </div>
+                        </div>
+                        <div class="metric-row lfhf-row">
+                            <div class="metric-label lfhf-label" id="lfhfToggle" role="button" aria-expanded="false" aria-label="Dettagli LF/HF" tabindex="0">
+                                LF/HF <span class="caret">▾</span>
+                            </div>
+                            <div class="metric-value lfhf-value">
+                                <span id="lfhfValue">--</span>
+                                <span class="metric-unit">ratio</span>
+                            </div>
+                        </div>
+                        <div class="lfhf-panel" id="lfhfPanel">
+                            <div class="sub-metric">
+                                <span>LF/HF (raw)</span><span id="lfhfRawValue">--</span>
+                            </div>
+                            <div class="sub-metric">
+                                <span>LF power</span><span id="lfPowerValue">--</span>
+                            </div>
+                            <div class="sub-metric">
+                                <span>HF power</span><span id="hfPowerValue">--</span>
+                            </div>
+                            <div class="sub-metric">
+                                <span>Qualità finestra</span><span id="windowQualityValue">--</span>
+                            </div>
+                        </div>
+
+                        <div class="metric-divider"></div>
+
+                        <div class="metric-row">
+                            <div class="metric-label">HRV<sup>2</sup></div>
+                            <div class="metric-value">
+                                <span id="hrvIndexValue" class="metric-highlight">--</span>
+                                <span class="metric-unit">ms</span>
+                            </div>
+                        </div>
+                        <div class="metric-note"><sup>1</sup> Valori calcolati sui parametri impostati</div>
+                        <div class="metric-note"><sup>2</sup> Indice informativo, non elaborato con algoritmi di ML</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sensor-row" id="rowMuse">
+            <div class="side-column">
+                <div id="museCard" class="card-square">
+                    <div class="status-header">
+                        <div class="status-left">
+                            <div id="museStatusLed" class="status-led"></div>
+                            <div class="status-text">
+                                <span class="status-title">Muse S Athena</span>
+                                <div class="status-subline">
+                                    <span id="museStatus" class="status-subtitle">Non connesso</span>
+                                    <span id="museBatteryBadge" class="status-badge">--%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mode-row">
+                        <div class="mode-switch">
+                            <button class="mode-btn-muse active" data-muse-mode="live">Live</button>
+                            <button class="mode-btn-muse" data-muse-mode="debug">Debug</button>
+                        </div>
+                    </div>
+                    <div class="metric-row">
+                        <div class="metric-label">Host:&nbsp</div>
+                        <div class="metric-value small muse-endpoint"><span id="museEndpoint">ws://127.0.0.1:3002</span></div>
+                    </div>
+                    <div class="status-footer status-footer--compact">
+                        <div class="elapsed-block">
+                            <div class="elapsed-label" id="museElapsedLabel">Tempo trascorso</div>
+                            <div class="elapsed-time" id="museElapsedTime">00:00:00</div>
+                        </div>
+                        <div id="museConnectionTime" class="connection-time"></div>
+                    </div>
+                    <button id="museConnectButton" class="pill-button pill-button--primary pill-button--narrow">Connetti</button>
+                    <button id="museLoadCsvButton" class="pill-button pill-button--primary pill-button--narrow">Carica CSV</button>
+                    <input type="file" id="museCsvInput" accept=".csv,text/csv" class="hidden-input" hidden />
+                </div>
+            </div>
+
+                    <div id="museChartContainer" class="card-square">
+                    <div id="museChartDropZone" class="chart-drop-zone" hidden>
+                        <div class="drop-zone-inner">
+                            <span class="drop-hint">Trascina qui il CSV</span>
+                        </div>
+                    </div>
+                    <canvas id="museChart"></canvas>
+                    <canvas id="museMarkerOverlay"></canvas>
+                    <canvas id="museSpectrogram" class="spectrogram-canvas" aria-hidden="true"></canvas>
+                    <div id="museChartControls" class="chart-controls">
+                        <button id="museDownloadButton" class="icon-button" aria-label="Scarica CSV">
+                            <svg class="icon-download" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 3v10m0 0l-4-4m4 4l4-4M4 19h16"/>
+                            </svg>
+                        </button>
+                        <button id="museMarkerButton" class="icon-button" aria-label="Aggiungi marker">
+                            <svg class="icon-pin" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 22s7-7.2 7-12a7 7 0 1 0-14 0c0 4.8 7 12 7 12Z"/>
+                                <circle cx="12" cy="10" r="2.5"/>
+                            </svg>
+                        </button>
+                        <select id="museViewSelect" class="select-pill">
+                            <option value="raw">Raw EEG (µV)</option>
+                            <option value="absolute">Bande (PSD)</option>
+                            <option value="fft">Discrete (FFT)</option>
+                            <option value="ppg">PPG (arb. u.)</option>
+                            <option value="optics">Optics (arb. u.)</option>
+                            <option value="accelerometer">Accelerometro</option>
+                            <option value="gyroscope">Giroscopio</option>
+                            <option value="battery">Batteria (%)</option>
+                        </select>
+                        <select id="museMetricSelect" class="select-pill metric-picker">
+                            <option value="eeg">EEG</option>
+                            <option value="alphaAbsolute">Alpha (α)</option>
+                            <option value="betaAbsolute">Beta (β)</option>
+                            <option value="thetaAbsolute">Theta (θ)</option>
+                            <option value="deltaAbsolute">Delta (δ)</option>
+                            <option value="gammaAbsolute">Gamma (γ)</option>
+                            <option value="ppg">PPG</option>
+                            <option value="optics">Optics</option>
+                            <option value="battery">Batteria (%)</option>
+                        </select>
+                    </div>
+                    <div id="museChartScroll" class="chart-scroll" hidden>
+                        <input id="museChartScrollInput" type="range" min="0" max="0" step="1" value="0" aria-label="Scorrimento grafico Muse" />
+                    </div>
+                <div id="museLegend" class="chart-legend muse-legend"></div>
+            </div>
+
+        <div id="museBatteryColumn" class="side-column">
+            <div class="card-square data-card muse-data-card">
+                    <div class="data-box">
+                        <div class="label">
+                            <span class="icon-battery" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                                    <path d="M7 7a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-1h1.2a1 1 0 0 0 1-1V11a1 1 0 0 0-1-1H17V9a2 2 0 0 0-2-2H7Zm0 2h8v6H7V9Z" fill="currentColor"/>
+                                </svg>
+                            </span>
+                            Batteria
+                        </div>
+                        <div class="value muse-last-type" id="museBatteryValue">--</div>
+                        <div class="unit">ETA<sup>3</sup>: <span id="museBatteryEta">--</span></div>
+                    </div>
+                    <div class="metric-note-block">
+                        <div class="metric-divider"></div>
+                        <div class="metric-note"><sup>3</sup> Valore indicativo calcolato su una scarica media di un punto batteria% ogni 2-3 min</div>
+                    </div>
+                </div>
+            <div class="muse-side-row">
+                <div id="museMotionCard" class="card-square data-card muse-data-card muse-motion-card">
+                    <div class="data-box">
+                        <div class="label">
+                            <span class="icon-motion" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                                    <circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
+                                    <circle cx="12" cy="12" r="2" fill="currentColor"/>
+                                </svg>
+                            </span>
+                            Movimento
+                        </div>
+                        <div class="muse-motion">
+                            <div class="muse-motion-circle" id="museMotionCircle">
+                                <div class="muse-motion-dot" id="museMotionDot"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="museMaxGCard" class="card-square data-card muse-data-card muse-gmax-card">
+                    <div class="data-box">
+                        <div class="label"><span class="icon-ext icon-max">⬆︎</span>G MAX</div>
+                        <div class="value" id="museMaxGValue">--</div>
+                        <div class="unit" id="museMaxGTime">--</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="museInfoColumn" class="side-column info-column">
+            <div id="museMetricsCard" class="card-square info-card muse-data-card">
+                    <div class="info-header">
+                        <div class="info-title-row">
+                            <span class="icon-science">Σ</span>
+                            <span class="info-title">Metriche<sup>4</sup></span>
+                        </div>
+                    </div>
+                    <div class="info-body">
+                        
+                        <div class="metric-row muse-row">
+                            <div class="metric-label">RAW EEG<sup>5</sup></div>
+                            <div class="metric-value">
+                                <span id="museValueEeg">--</span>
+                                <span class="metric-unit">µV</span>
+                            </div>
+                        </div>
+                        <div class="metric-row muse-row lfhf-row">
+                            <div class="metric-label lfhf-label" id="museBandsToggle" role="button" aria-expanded="false" aria-label="Dettagli Bande (PSD)" tabindex="0">
+                                Bande (PSD) <span class="caret">▾</span>
+                            </div>
+                        </div>
+                        <div class="lfhf-panel" id="museBandsPanel">
+                            <div class="sub-metric">
+                                <span>Alpha (α)</span>
+                                <span><span id="museValueAlphaAbs">--</span> <span class="metric-unit">PSD</span></span>
+                            </div>
+                            <div class="sub-metric">
+                                <span>Beta (β)</span>
+                                <span><span id="museValueBetaAbs">--</span> <span class="metric-unit">PSD</span></span>
+                            </div>
+                            <div class="sub-metric">
+                                <span>Theta (θ)</span>
+                                <span><span id="museValueThetaAbs">--</span> <span class="metric-unit">PSD</span></span>
+                            </div>
+                            <div class="sub-metric">
+                                <span>Delta (δ)</span>
+                                <span><span id="museValueDeltaAbs">--</span> <span class="metric-unit">PSD</span></span>
+                            </div>
+                            <div class="sub-metric">
+                                <span>Gamma (γ)</span>
+                                <span><span id="museValueGammaAbs">--</span> <span class="metric-unit">PSD</span></span>
+                            </div>
+                        </div>
+                        <div class="metric-row muse-row">
+                            <div class="metric-label">Discrete (FFT)<sup>6</sup></div>
+                            <div class="metric-value">
+                                <span id="museValueFft">--</span>
+                                <span class="metric-unit">log power</span>
+                            </div>
+                        </div>
+                        <div class="metric-row muse-row">
+                            <div class="metric-label">PPG<sup>7</sup></div>
+                            <div class="metric-value">
+                                <span id="museValuePpg">--</span>
+                                <span class="metric-unit">arb. u.</span>
+                            </div>
+                        </div>
+                        <div class="metric-row muse-row">
+                            <div class="metric-label">Optics<sup>8</sup></div>
+                            <div class="metric-value">
+                                <span id="museValueOptics">--</span>
+                                <span class="metric-unit">arb. u.</span>
+                            </div>
+                        </div>
+                        <div class="metric-divider"></div>
+                        <div class="metric-note"><sup>4</sup> Bande normalizzate su scala 0–100</div>
+                        <div class="metric-note"><sup>5</sup> Ampiezza istantanea del segnale EEG grezzo</div>
+                        <div class="metric-note"><sup>6</sup> Spettro di potenza calcolato su finestra breve dell'EEG</div>
+                        <div class="metric-note"><sup>7</sup> Stima relativa del battito cardiaco (derivata da Optics)</div>
+                        <div class="metric-note"><sup>8</sup> Segnali raw dei sensori ottici (base per PPG/fNIRS)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sensor-row" id="rowObd">
+            <div class="side-column">
+                <div id="obdCard" class="card-square">
+                    <div class="status-header">
+                        <div class="status-left">
+                            <div id="obdStatusLed" class="status-led"></div>
+                            <div class="status-text">
+                                <span class="status-title">OBD-II (ELM327)</span>
+                                <span id="obdStatus" class="status-subtitle">Non connesso</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mode-row-obd">
+                        <div class="mode-switch-obd">
+                            <button class="mode-btn-obd active" data-obd-mode="live">Live</button>
+                            <button class="mode-btn-obd" data-obd-mode="debug">Debug</button>
+                        </div>
+                    </div>
+                    <div class="metric-row">
+                        <div class="metric-label">Host:&nbsp</div>
+                        <div class="metric-value small"><span id="obdEndpoint">ws://localhost:3001</span></div>
+                    </div>
+                    <div class="metric-row">
+                        <div class="metric-label">Car:&nbsp</div>
+                        <div class="metric-value small"><span>Citroën C3 (III - 1.2)</span></div>
+                    </div>
+                    <div class="status-footer status-footer--compact">
+                        <div class="elapsed-block">
+                            <div class="elapsed-label" id="obdElapsedLabel">Tempo trascorso</div>
+                            <div class="elapsed-time" id="obdElapsedTime">00:00:00</div>
+                        </div>
+                    </div>
+                    <div id="obdConnectionTime" class="connection-time"></div>
+                    <button id="obdConnectButton" class="pill-button pill-button--primary pill-button--narrow">Connetti</button>
+                    <button id="obdLoadCsvButton" class="pill-button pill-button--primary pill-button--narrow">Carica CSV</button>
+                    <input type="file" id="obdCsvInput" accept=".csv,text/csv" class="hidden-input" hidden />
+                </div>
+            </div>
+
+            <div id="obdChartContainer" class="card-square">
+                <div id="obdChartDropZone" class="chart-drop-zone" hidden>
+                    <div class="drop-zone-inner">Rilascia qui il CSV</div>
+                </div>
+                <canvas id="obdChart"></canvas>
+                <canvas id="obdMarkerOverlay"></canvas>
+                <div id="obdChartControls" class="chart-controls">
+                    <button id="obdDownloadButton" class="icon-button" aria-label="Scarica CSV">
+                        <svg class="icon-download" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 3v10m0 0l-4-4m4 4l4-4M4 19h16"/>
+                        </svg>
+                    </button>
+                    <button id="obdMarkerButton" class="icon-button" aria-label="Aggiungi marker">
+                        <svg class="icon-pin" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 22s7-7.2 7-12a7 7 0 1 0-14 0c0 4.8 7 12 7 12Z"/>
+                            <circle cx="12" cy="10" r="2.5"/>
+                        </svg>
+                    </button>
+                    <select id="obdMetricSelect" class="select-pill">
+                        <option value="rpm">RPM</option>
+                        <option value="speed">Velocità (km/h)</option>
+                        <option value="coolant">Temp. liquido (°C)</option>
+                        <option value="intakeTemp">Temp. aria (°C)</option>
+                        <option value="engineLoad">Carico ICE (%)</option>
+                        <option value="throttle">Acceleratore (%)</option>
+                        <option value="manifoldPressure">Pressione collettore (kPa)</option>
+                        <option value="fuelConsumption">Consumo carburante (l/100km)</option>
+                        <option value="fuelLevel">Livello carburante (%)</option>
+                        <option value="batteryVoltage">Batteria (V)</option>
+                        <option value="engineTorque">Coppia (Nm)</option>
+                        <option value="enginePower">Potenza ICE (kW)</option>
+                        <option value="boostPressure">Boost (kPa)</option>
+                        <option value="ambientTemp">Temp. ambiente (°C)</option>
+                    </select>
+                </div>
+                <div id="obdChartScroll" class="chart-scroll" hidden>
+                    <input id="obdChartScrollInput" type="range" min="0" max="0" step="1" value="0" aria-label="Scorrimento grafico OBD" />
+                </div>
+            </div>
+
+            <div id="obdDataColumn" class="side-column obd-mini-column">
+                <div class="card-square data-card obd-data-card">
+                    <div class="data-box">
+                        <div class="label"><span class="icon-rpm">⟳</span>RPM ATTUALI</div>
+                        <div class="value" id="obdRpmCard">--</div>
+                        <div class="unit">RPM</div>
+                    </div>
+                </div>
+                <div class="card-square data-card obd-data-card">
+                    <div class="data-box">
+                        <div class="label"><span class="icon-speed" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M5 15a7 7 0 1 1 14 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                                <path d="M12 12l4-3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                                <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+                            </svg>
+                        </span>Velocità</div>
+                        <div class="value" id="obdSpeedCard">--</div>
+                        <div class="unit">KM/H</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="obdExtremesColumn" class="side-column obd-mini-column">
+                <div class="card-square data-card obd-data-card">
+                    <div class="data-box">
+                        <div class="label"><span class="icon-ext icon-max">⬆︎</span>Velocità max</div>
+                        <div class="value" id="obdSpeedMax">--</div>
+                        <div class="unit" id="obdSpeedMaxTime">--</div>
+                    </div>
+                </div>
+                <div class="card-square data-card obd-data-card">
+                    <div class="data-box">
+                        <div class="label"><span class="icon-temp" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 3s6 6.5 6 10.5a6 6 0 0 1-12 0C6 9.5 12 3 12 3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                            </svg>
+                        </span>Temp. liquido</div>
+                        <div class="value" id="obdCoolantCard">--</div>
+                        <div class="unit">°C</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="obdTelemetryColumn" class="side-column info-column">
+                <div id="obdTelemetryCard" class="card-square info-card">
+                    <div class="info-header">
+                        <div class="info-title-row">
+                            <span class="icon-science">Σ</span>
+                            <span class="info-title">TELEMETRIA</span>
+                        </div>
+                    </div>
+                    <div class="info-body">
+                        <div class="metric-row">
+                            <div class="metric-label">Temperatura liquido</div>
+                            <div class="metric-value"><span id="obdTelemetryCoolant">--</span><span class="metric-unit">°C</span></div>
+                        </div>
+                        <div class="metric-row">
+                            <div class="metric-label">Temperatura aria</div>
+                            <div class="metric-value"><span id="obdTelemetryIntakeTemp">--</span><span class="metric-unit">°C</span></div>
+                        </div>
+                        <div class="metric-row">
+                            <div class="metric-label">Carico ICE<sup>9</sup></div>
+                            <div class="metric-value"><span id="obdTelemetryEngineLoad">--</span><span class="metric-unit">%</span></div>
+                        </div>
+                        <div class="metric-row">
+                            <div class="metric-label">Acceleratore</div>
+                            <div class="metric-value"><span id="obdTelemetryThrottle">--</span><span class="metric-unit">%</span></div>
+                        </div>
+                        <div class="metric-row">
+                            <div class="metric-label">Press. collettore</div>
+                            <div class="metric-value"><span id="obdTelemetryManifoldPressure">--</span><span class="metric-unit">kPa</span></div>
+                        </div>
+                        <div class="metric-row lfhf-row">
+                            <div class="metric-label lfhf-label" id="obdMoreToggle" role="button" aria-expanded="false" aria-label="Dettagli More" tabindex="0">
+                                More <span class="caret">▾</span>
+                            </div>
+                        </div>
+                        <div class="lfhf-panel" id="obdMorePanel">
+                            <div class="sub-metric">
+                                <span>Consumo carburante</span>
+                                <span><span id="obdTelemetryFuelConsumption">--</span> <span class="metric-unit">l/100km</span></span>
+                            </div>
+                            <div class="sub-metric">
+                                <span>Livello carburante</span>
+                                <span><span id="obdTelemetryFuelLevel">--</span> <span class="metric-unit">%</span></span>
+                            </div>
+                            <div class="sub-metric">
+                                <span>Batteria</span>
+                                <span><span id="obdTelemetryBatteryVoltage">--</span> <span class="metric-unit">V</span></span>
+                            </div>
+                            <div class="sub-metric">
+                                <span>Coppia</span>
+                                <span><span id="obdTelemetryEngineTorque">--</span> <span class="metric-unit">Nm</span></span>
+                            </div>
+                            <div class="sub-metric">
+                                <span>Potenza ICE</span>
+                                <span><span id="obdTelemetryEnginePower">--</span> <span class="metric-unit">kW</span></span>
+                            </div>
+                            <div class="sub-metric">
+                                <span>Boost</span>
+                                <span><span id="obdTelemetryBoostPressure">--</span> <span class="metric-unit">kPa</span></span>
+                            </div>
+                            <div class="sub-metric">
+                                <span>Temperatura ambiente</span>
+                                <span><span id="obdTelemetryAmbientTemp">--</span> <span class="metric-unit">°C</span></span>
+                            </div>
+                        </div>
+                        <div class="metric-divider"></div>
+                        <div class="metric-note"><sup>9</sup> Valore stimato dalla centralina come rapporto tra coppia/aria richiesta e la capacità disponibile</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sensor-row" id="rowPhyphox">
+            <div class="side-column">
+                <div id="phyphoxCard" class="card-square">
+                    <div class="status-header">
+                        <div class="status-left">
+                            <div id="phyphoxStatusLed" class="status-led"></div>
+                            <div class="status-text">
+                                <span class="status-title">iPad Pro (13,8)</span>
+                                <div class="status-subline">
+                                    <span id="phyphoxStatus" class="status-subtitle">Non connesso</span>
+                                    <span id="phyphoxBatteryBadge" class="status-badge">--%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mode-row-phyphox">
+                        <div class="mode-switch-phyphox">
+                            <button class="mode-btn-phyphox active" data-phyphox-mode="live">Live</button>
+                            <button class="mode-btn-phyphox" data-phyphox-mode="debug">Debug</button>
+                        </div>
+                    </div>
+                    <div class="metric-row">
+                        <div class="metric-label">Host:&nbsp</div>
+                        <div class="metric-value small"><span id="phyphoxEndpoint">192.168.1.20</span></div>
+                    </div>
+                    <div class="metric-row">
+                        <div class="metric-label">App:&nbsp</div>
+                        <div class="metric-value small"><span>Phyphox</span></div>
+                    </div>
+                    <div class="status-footer status-footer--compact">
+                        <div class="elapsed-block">
+                            <div class="elapsed-label" id="phyphoxElapsedLabel">Tempo trascorso</div>
+                            <div class="elapsed-time" id="phyphoxElapsedTime">00:00:00</div>
+                        </div>
+                    </div>
+                    <div id="phyphoxConnectionTime" class="connection-time"></div>
+                    <button id="phyphoxConnectButton" class="pill-button pill-button--primary pill-button--narrow">Connetti</button>
+                    <button id="phyphoxLoadCsvButton" class="pill-button pill-button--primary pill-button--narrow">Carica CSV</button>
+                    <input type="file" id="phyphoxCsvInput" accept=".csv,.zip,text/csv,application/zip" class="hidden-input" hidden />
+                </div>
+            </div>
+
+            <div id="phyphoxChartContainer" class="card-square">
+                <div id="phyphoxChartDropZone" class="chart-drop-zone" hidden>
+                    <div class="drop-zone-inner">Rilascia qui il CSV/ZIP Phyphox</div>
+                </div>
+                <canvas id="phyphoxChart"></canvas>
+                <canvas id="phyphoxMarkerOverlay"></canvas>
+                <div id="phyphoxChartControls" class="chart-controls">
+                    <button id="phyphoxDownloadButton" class="icon-button" aria-label="Scarica CSV">
+                        <svg class="icon-download" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 3v10m0 0l-4-4m4 4l4-4M4 19h16"/>
+                        </svg>
+                    </button>
+                    <button id="phyphoxMarkerButton" class="icon-button" aria-label="Aggiungi marker">
+                        <svg class="icon-pin" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 22s7-7.2 7-12a7 7 0 1 0-14 0c0 4.8 7 12 7 12Z"/>
+                            <circle cx="12" cy="10" r="2.5"/>
+                        </svg>
+                    </button>
+                    <select id="phyphoxMetricSelect" class="select-pill">
+                        <option value="accelX">Accel X (m/s²)</option>
+                        <option value="accelY">Accel Y (m/s²)</option>
+                        <option value="accelZ">Accel Z (m/s²)</option>
+                        <option value="linAccX">Linear Accel X (m/s²)</option>
+                        <option value="linAccY">Linear Accel Y (m/s²)</option>
+                        <option value="linAccZ">Linear Accel Z (m/s²)</option>
+                        <option value="gravX">Gravity X (m/s²)</option>
+                        <option value="gravY">Gravity Y (m/s²)</option>
+                        <option value="gravZ">Gravity Z (m/s²)</option>
+                        <option value="gyroX">Gyro X (rad/s)</option>
+                        <option value="gyroY">Gyro Y (rad/s)</option>
+                        <option value="gyroZ">Gyro Z (rad/s)</option>
+                        <option value="yaw">Yaw (°)</option>
+                        <option value="pitch">Pitch (°)</option>
+                        <option value="roll">Roll (°)</option>
+                        <option value="direct">Direct (°)</option>
+                        <option value="velocity">Velocity (m/s)</option>
+                        <option value="height">Height (m)</option>
+                        <option value="lat">Latitude (°)</option>
+                        <option value="lon">Longitude (°)</option>
+                    </select>
+                </div>
+                <div id="phyphoxChartScroll" class="chart-scroll" hidden>
+                    <input id="phyphoxChartScrollInput" type="range" min="0" max="0" step="1" value="0" aria-label="Scorrimento grafico Phyphox" />
+                </div>
+            </div>
+
+            <div id="phyphoxMapColumn" class="side-column info-column">
+                <div id="phyphoxMapCard" class="card-square info-card map-card">
+                    <div class="info-header">
+                        <div class="info-title-row">
+                            <span class="icon-motion" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M12 22s7-7.2 7-12a7 7 0 1 0-14 0c0 4.8 7 12 7 12Z"/>
+                                    <circle cx="12" cy="10" r="2.5"/>
+                                </svg>
+                            </span>
+                            <span class="info-title">PERCORSO</span>
+                        </div>
+                    </div>
+                    <div class="info-body">
+                        <div id="phyphoxMap" class="map-canvas"></div>
+                        <div class="map-controls">
+                            <button id="phyphoxMapZoomIn" class="icon-button" aria-label="Zoom in mappa">
+                                <svg class="icon-zoom" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                                </svg>
+                            </button>
+                            <button id="phyphoxMapZoomOut" class="icon-button" aria-label="Zoom out mappa">
+                                <svg class="icon-zoom" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="phyphoxTelemetryColumn" class="side-column info-column">
+                <div id="phyphoxTelemetryCard" class="card-square info-card">
+                    <div class="info-header">
+                        <div class="info-title-row">
+                            <span class="icon-science">Σ</span>
+                            <span class="info-title">TELEMETRIA</span>
+                        </div>
+                    </div>
+                    <div class="info-body">
+                        <div class="metric-row">
+                            <div class="metric-label">Accelerazione<sup>10</sup></div>
+                            <div class="metric-value"><span id="phyphoxTelemetryAccel">--</span><span class="metric-unit">m/s²</span></div>
+                        </div>
+                        <div class="metric-row">
+                            <div class="metric-label">Rotazione<sup>11</sup></div>
+                            <div class="metric-value"><span id="phyphoxTelemetryGyro">--</span><span class="metric-unit">rad/s</span></div>
+                        </div>
+                        <div class="metric-row">
+                            <div class="metric-label">Yaw</div>
+                            <div class="metric-value"><span id="phyphoxTelemetryYaw">--</span><span class="metric-unit">°</span></div>
+                        </div>
+                        <div class="metric-row">
+                            <div class="metric-label">Pitch</div>
+                            <div class="metric-value"><span id="phyphoxTelemetryPitch">--</span><span class="metric-unit">°</span></div>
+                        </div>
+                        <div class="metric-row">
+                            <div class="metric-label">Roll</div>
+                            <div class="metric-value"><span id="phyphoxTelemetryRoll">--</span><span class="metric-unit">°</span></div>
+                        </div>
+                        <div class="metric-row lfhf-row">
+                            <div class="metric-label lfhf-label" id="phyphoxMoreToggle" role="button" aria-expanded="false" aria-label="Dettagli More" tabindex="0">
+                                More <span class="caret">▾</span>
+                            </div>
+                        </div>
+                        <div class="lfhf-panel" id="phyphoxMorePanel">
+                            <div class="sub-metric">
+                                <span>Velocità</span>
+                                <span><span id="phyphoxTelemetryVelocity">--</span> <span class="metric-unit">m/s</span></span>
+                            </div>
+                            <div class="sub-metric">
+                                <span>Altezza</span>
+                                <span><span id="phyphoxTelemetryHeight">--</span> <span class="metric-unit">m</span></span>
+                            </div>
+                            <div class="sub-metric">
+                                <span>Latitudine</span>
+                                <span><span id="phyphoxTelemetryLat">--</span> <span class="metric-unit">°</span></span>
+                            </div>
+                            <div class="sub-metric">
+                                <span>Longitudine</span>
+                                <span><span id="phyphoxTelemetryLon">--</span> <span class="metric-unit">°</span></span>
+                            </div>
+                        </div>
+                        <div class="metric-divider"></div>
+                        <div class="metric-note"><sup>10</sup> Modulo dell’accelerazione risultante (aggregata su assi X/Y/Z)</div>
+                        <div class="metric-note"><sup>11</sup> Modulo della velocità angolare risultante (aggregata su assi X/Y/Z)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sensor-row" id="rowOsmo360">
+            <div class="side-column">
+                <div id="osmoCard" class="card-square">
+                    <div class="status-header">
+                        <div class="status-left">
+                            <div id="osmoStatusLed" class="status-led"></div>
+                            <div class="status-text">
+                                <span class="status-title">DJI Osmo 360</span>
+                                <div class="status-subline">
+                                    <span id="osmoStatus" class="status-subtitle">Non connesso</span>
+                                    <span id="osmoBatteryBadge" class="status-badge">--%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mode-row-osmo">
+                        <div class="mode-switch-osmo">
+                            <button class="mode-btn-osmo active" data-osmo-mode="live">Live</button>
+                            <button class="mode-btn-osmo" data-osmo-mode="debug">Debug</button>
+                        </div>
+                    </div>
+                    <div class="status-footer status-footer--compact">
+                        <div class="elapsed-block">
+                            <div id="osmoElapsedLabel" class="elapsed-label">Tempo trascorso</div>
+                            <div id="osmoElapsedTime" class="elapsed-time">00:00:00</div>
+                        </div>
+                    </div>
+                    <div id="osmoConnectionTime" class="connection-time"></div>
+                    <button id="osmoConnectButton" class="pill-button pill-button--primary pill-button--narrow">Connetti</button>
+                </div>
+            </div>
+
+            <div id="osmoFrontCard" class="card-square info-card video-card">
+                <div class="info-header">
+                    <div class="info-title-row">
+                        <span class="icon-motion" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M8 6l9 6-9 6V6z" fill="currentColor"/>
+                            </svg>
+                        </span>
+                        <span class="info-title">Anteriore</span>
+                    </div>
+                </div>
+                <div class="info-body">
+                    <div id="osmoFrontFrame" class="video-frame">
+                        <div id="osmoFrontDropZone" class="chart-drop-zone" hidden>
+                            <div class="drop-zone-inner">Rilascia qui il video anteriore</div>
+                        </div>
+                        <video id="osmoFrontVideo" class="osmo-video" playsinline preload="metadata">
+                            <source src="../media/session01-2025-12-09--12-42-09-dji-road.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </div>
+            </div>
+
+            <div id="osmoRearCard" class="card-square info-card video-card">
+                <div class="info-header">
+                    <div class="info-title-row">
+                        <span class="icon-motion" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M8 6l9 6-9 6V6z" fill="currentColor"/>
+                            </svg>
+                        </span>
+                        <span class="info-title">Posteriore</span>
+                    </div>
+                </div>
+                <div class="info-body">
+                    <div id="osmoRearFrame" class="video-frame">
+                        <div id="osmoRearDropZone" class="chart-drop-zone" hidden>
+                            <div class="drop-zone-inner">Rilascia qui il video posteriore</div>
+                        </div>
+                        <video id="osmoRearVideo" class="osmo-video" playsinline preload="metadata">
+                            <source src="../media/session01-2025-12-09--12-42-09-dji-driver.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </div>
+            </div>
+
+            <div class="side-column osmo-metrics-column">
+                <div class="card-square data-card osmo-data-card osmo-meta-card">
+                    <div class="data-box">
+                        <div class="label"><span class="icon-motion" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M8 6l9 6-9 6V6z" fill="currentColor"/>
+                            </svg>
+                        </span>Metadati</div>
+                        <div class="value osmo-meta-value">
+                            <span id="osmoMetaFps">--</span>
+                            <span class="osmo-meta-sep">/</span>
+                            <span id="osmoMetaFov">--</span>
+                            <span class="osmo-meta-sep">/</span>
+                            <span id="osmoMetaCorrection">---</span>
+                        </div>
+                        <div class="unit osmo-meta-unit">
+                            <span>FPS</span>
+                            <span class="osmo-meta-sep">/</span>
+                            <span>FOV°</span>
+                            <span class="osmo-meta-sep">/</span>
+                            <span>CORRECTION°</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-square data-card osmo-data-card osmo-player-card">
+                    <div class="data-box">
+                        <div class="label"><span class="icon-motion" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M8 6l9 6-9 6V6z" fill="currentColor"/>
+                            </svg>
+                        </span>Player</div>
+                        <div class="osmo-player-controls">
+                            <button id="osmoSeekBack" class="icon-button osmo-step-button" aria-label="Indietro 5 secondi">
+                                <span class="osmo-step-label">-5s</span>
+                            </button>
+                            <button id="osmoPlayToggle" class="icon-button" aria-label="Play/Pausa">
+                                <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M8 6l10 6-10 6V6z" fill="currentColor"/>
+                                </svg>
+                                <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M8 6h3v12H8V6Zm5 0h3v12h-3V6Z" fill="currentColor"/>
+                                </svg>
+                                <svg class="icon-stop" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M7 7h10v10H7V7z" fill="currentColor"/>
+                                </svg>
+                            </button>
+                            <button id="osmoSeekForward" class="icon-button osmo-step-button" aria-label="Avanti 5 secondi">
+                                <span class="osmo-step-label">+5s</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+  
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+    <script type="module" src="../src/scripts/main.js"></script>
+</body>
+</html>

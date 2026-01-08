@@ -1,0 +1,35 @@
+# OS files
+.DS_Store
+
+# IDE/editor
+.vscode/
+.idea/
+
+# Environment & secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Dependencies & build output
+node_modules/
+dist/
+build/
+coverage/
+.cache/
+.module-cache/
+.parcel-cache/
+.vite/
+.next/
+out/
+tmp/
+*.log
+*.dSYM/
+
+# Local binaries
+backend/bridges/muse/bridge
+
+# Proprietary SDKs and large media
+private/vendor/
+backend/bridges/muse/Muse.framework
+frontend/media/

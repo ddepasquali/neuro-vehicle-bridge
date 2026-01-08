@@ -2,6 +2,8 @@
 
 Browser dashboard + local bridges for multi-sensor capture and review (biometrics + vehicle signals) in a single UI. The project aggregates data from Polar H10, Muse S Athena, OBD-II (ELM327), phone sensors via Phyphox, and dual video from DJI Osmo 360. Everything is local-first: no cloud services, no remote backend, data stays in memory with manual export.
 
+> **Warning**: The proprietary Muse SDK (`Muse.framework`) is not included in this repository. Please request access directly from [Muse](https://choosemuse.com/pages/developers?srsltid=AfmBOooa34xRVr4UKVdQlJ7nJAJku5KkewUOE1hYPX_q0yY5y1wlwKBH).
+
 ![ui_demo(1)](https://github.com/user-attachments/assets/bd338361-ad9c-4100-a0ac-12906bb1fc10)
 *UI demo in action.*
 
@@ -116,7 +118,7 @@ Note: the UI does not consume the WS yet (Live is simulated).
 - `frontend/`: static UI (sensor modules, charts, map, video).
 - `backend/bridges/obd/`: Node bridge (ELM327 Wi-Fi -> WebSocket).
 - `backend/bridges/muse/`: Swift bridge for Muse Athena S.
-- `private/vendor/muse/Muse.framework`: proprietary SDK (do not commit variants).
+- `private/vendor/muse/Muse.framework`: proprietary SDK (not included; request access from muse.com).
 - `frontend/media/`: Osmo 360 sample videos for demo.
 
 ## Future work
