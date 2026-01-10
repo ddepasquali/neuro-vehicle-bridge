@@ -4,10 +4,10 @@ Browser dashboard + local bridges for multi-sensor capture and review (biometric
 
 > **Warning**: The proprietary Muse SDK (`Muse.framework`) is not included in this repository. Please request access directly from [Muse](https://choosemuse.com/pages/developers?srsltid=AfmBOooa34xRVr4UKVdQlJ7nJAJku5KkewUOE1hYPX_q0yY5y1wlwKBH).
 
-![ui_demo(1)](https://github.com/user-attachments/assets/bd338361-ad9c-4100-a0ac-12906bb1fc10)
+![ui_demo(1)](https://github.com/user-attachments/assets/0b64418e-a13a-44df-9834-5ec3393dea59)
 *UI demo in action.*
 
-![ui_demo(2)](https://github.com/user-attachments/assets/035871c7-a707-4bd8-a1ac-685176b8bf61)
+![ui_demo(2)](https://github.com/user-attachments/assets/f3e723f0-3ab2-48e1-9313-180521bd55a6)
 *UI demo in action.*
 
 ## Status and scope
